@@ -166,8 +166,14 @@ def parse(lines: Iterable[str]) -> list[AnalyticsRun]:
                 seconds = float(m2.group(2))
                 for prog in current_table.program_updates:
                     if prog.uid.lower() == uid_lower and prog.had_data:
-                        prog.population_seconds = seconds
+                        # Accumulate: full runs have multiple year partitions per program
+                        prog.population_seconds = (prog.population_seconds or 0.0) + seconds
                         break
+                else:
+                    # Full run: no preceding "Added latest" line — create on the fly
+                    current_table.program_updates.append(
+                        ProgramUpdate(uid=uid_lower, had_data=True, population_seconds=seconds)
+                    )
                 continue
 
     _close_run()

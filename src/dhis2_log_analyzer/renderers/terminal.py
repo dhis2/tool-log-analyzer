@@ -83,13 +83,16 @@ def _render_summary_table(runs: list[AnalyticsRun]) -> None:
                 # Index creation covers all programs combined — show as its own row
                 if t.index_seconds is not None:
                     rows.setdefault("EVENT / indexes", []).append(t.index_seconds)
-                # Population time per program: sum all partitions within this run
+                # Population time per program: sum all partitions within this run.
+                # Normalize UID to lowercase so full-run (table-name) and continuous-run
+                # (original-case) entries for the same program aggregate together.
                 run_totals: dict[str, float] = {}
                 for p in t.program_updates:
                     if p.had_data and p.population_seconds is not None:
-                        run_totals[p.uid] = run_totals.get(p.uid, 0.0) + p.population_seconds
-                for uid, total in run_totals.items():
-                    rows.setdefault(f"EVENT / {uid}", []).append(total)
+                        uid_key = p.uid.lower()
+                        run_totals[uid_key] = run_totals.get(uid_key, 0.0) + p.population_seconds
+                for uid_key, total in run_totals.items():
+                    rows.setdefault(f"EVENT / {uid_key}", []).append(total)
             else:
                 rows.setdefault(t.type_name, []).append(t.duration_seconds)
 

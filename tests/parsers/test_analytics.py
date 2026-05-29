@@ -163,6 +163,29 @@ def test_first_run_duration_excludes_next_run_start():
     assert runs[0].total_duration_seconds == pytest.approx(expected)
 
 
+# ── full run per-program population ──────────────────────────────────────────
+
+def test_full_run_populate_creates_program_update_without_added_line():
+    """Full runs emit Populating table lines without preceding Added latest lines."""
+    lines = FULL_RUN_LINES[:7] + [  # up to and including DATA_VALUE done
+        "* INFO  2026-05-24T01:13:13,769 Starting update of type: EVENT, table name: 'analytics_event', parallel jobs: 19: 00:00:00.000 (Clock.java [pool-13-thread-269])",
+        "* INFO  2026-05-24T01:13:14,000 Populating table: 'analytics_event_k44xobxx4te_2024_temp' in: 8.443113 sec. (AbstractJdbcTableManager.java [ForkJoinPool-9398-worker-3])",
+        "* INFO  2026-05-24T01:13:15,000 Populating table: 'analytics_event_k44xobxx4te_2025_temp' in: 9.100000 sec. (AbstractJdbcTableManager.java [ForkJoinPool-9398-worker-3])",
+        "* INFO  2026-05-24T01:13:16,000 Populating table: 'analytics_event_cglczo4q3pj_2024_temp' in: 21.319828 sec. (AbstractJdbcTableManager.java [ForkJoinPool-9398-worker-5])",
+        "* INFO  2026-05-24T01:13:40,000 Table update done: 'analytics_event': 00:00:26.000 (Clock.java [pool-13-thread-269])",
+    ]
+    runs = parse(iter(lines))
+    assert len(runs) == 1
+    event = next(t for t in runs[0].table_updates if t.type_name == "EVENT")
+    by_uid = {p.uid: p for p in event.program_updates}
+    # k44xobxx4te: two year partitions summed
+    assert "k44xobxx4te" in by_uid
+    assert by_uid["k44xobxx4te"].population_seconds == pytest.approx(8.443113 + 9.100000)
+    # cglczo4q3pj: one year partition
+    assert "cglczo4q3pj" in by_uid
+    assert by_uid["cglczo4q3pj"].population_seconds == pytest.approx(21.319828)
+
+
 # ── continuous + full run interleaving ────────────────────────────────────────
 
 def test_full_run_after_continuous_is_detected_as_new_run():
