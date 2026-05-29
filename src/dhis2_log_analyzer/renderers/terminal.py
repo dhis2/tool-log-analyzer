@@ -112,25 +112,23 @@ def _render_index_chart(runs: list[AnalyticsRun]) -> None:
 
 
 def _render_program_breakdown(run: AnalyticsRun) -> None:
-    programs = [
-        p
-        for t in run.table_updates
-        if t.type_name == "EVENT"
-        for p in t.program_updates
-        if p.had_data and p.population_seconds is not None
-    ]
-    if not programs:
+    by_uid: dict[str, float] = {}
+    for t in run.table_updates:
+        if t.type_name != "EVENT":
+            continue
+        for p in t.program_updates:
+            if p.had_data and p.population_seconds is not None:
+                by_uid[p.uid] = by_uid.get(p.uid, 0.0) + p.population_seconds
+
+    if not by_uid:
         return
 
-    programs.sort(key=lambda p: p.population_seconds, reverse=True)
+    items = sorted(by_uid.items(), key=lambda x: x[1], reverse=True)
 
     _console.print("[bold]Per-Program Event Breakdown (latest run)[/bold]")
     plt.clf()
     plt.plot_size(*_chart_size())
-    plt.bar(
-        [p.uid for p in programs],
-        [p.population_seconds for p in programs],
-    )
+    plt.bar([uid for uid, _ in items], [secs for _, secs in items])
     plt.title("Event Table Population Time by Program")
     plt.ylabel("seconds")
     plt.show()

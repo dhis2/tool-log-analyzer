@@ -149,6 +149,20 @@ def test_two_consecutive_runs_parsed():
     assert runs[1].start_time.day == 25
 
 
+def test_first_run_duration_excludes_next_run_start():
+    """Run duration must end at last content line, not at the next run's start timestamp."""
+    lines = FULL_RUN_LINES + [
+        "* INFO  2026-05-25T01:00:20,025 Found 11 analytics table types: [DATA_VALUE] (DefaultAnalyticsTableGenerator.java [pool-13-thread-6])",
+        "* INFO  2026-05-25T01:12:00,000 Table update done: 'analytics': 00:10:32.000 (Clock.java [pool-13-thread-6])",
+    ]
+    runs = parse(iter(lines))
+    expected = (
+        datetime(2026, 5, 24, 1, 13, 13, 776000)
+        - datetime(2026, 5, 24, 1, 0, 20, 25000)
+    ).total_seconds()
+    assert runs[0].total_duration_seconds == pytest.approx(expected)
+
+
 # ── incomplete run ────────────────────────────────────────────────────────────
 
 def test_incomplete_run_has_no_table_update_done():

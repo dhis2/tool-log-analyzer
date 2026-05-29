@@ -79,20 +79,23 @@ def parse(lines: Iterable[str]) -> list[AnalyticsRun]:
             continue
         ts_str, msg = m.group(1), m.group(2)
         ts = _parse_timestamp(ts_str)
-        last_ts = ts
 
         if _FULL_RUN.search(msg):
             # Within a continuous run, this line is informational — do not start a new run.
             if current_run is not None and current_run.run_type == "continuous":
                 continue
             _close_run()
+            last_ts = ts
             current_run = AnalyticsRun(start_time=ts, run_type="full")
             continue
 
         if _CONTINUOUS_RUN.search(msg):
             _close_run()
+            last_ts = ts
             current_run = AnalyticsRun(start_time=ts, run_type="continuous")
             continue
+
+        last_ts = ts  # only update for non-boundary lines
 
         if current_run is None:
             continue
