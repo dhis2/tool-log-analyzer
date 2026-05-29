@@ -22,6 +22,7 @@ _TABLE_DONE = re.compile(r"Table update done: '([^']+)': (\d{2}:\d{2}:\d{2}\.\d+
 _TABLE_ABORTED = re.compile(r"Table update aborted[^:]*: '([^']+)': (\d{2}:\d{2}:\d{2}\.\d+)")
 _AGG_LEVELS = re.compile(r"Applied aggregation levels: (\d{2}:\d{2}:\d{2}\.\d+)")
 _INDEXES = re.compile(r"Created indexes: (\d{2}:\d{2}:\d{2}\.\d+)")
+_UPDATE_PARAMS = re.compile(r"AnalyticsTableUpdateParams\{.*?skip resource tables=(true|false)")
 _PROG_NO_DATA = re.compile(r"No updated latest event data found for program: '([^']+)'")
 _PROG_WITH_DATA = re.compile(r"Added latest event analytics partition for program: '([^']+)'")
 _PROG_POPULATE = re.compile(
@@ -108,6 +109,13 @@ def parse(lines: Iterable[str]) -> list[AnalyticsRun]:
         last_ts = ts  # only update for non-boundary lines
 
         if current_run is None:
+            continue
+
+        if m2 := _UPDATE_PARAMS.search(msg):
+            # Reclassify "full" runs that skip resource tables as "partial".
+            # This line appears immediately after "Found N analytics table types".
+            if current_run.run_type == "full" and m2.group(1) == "true":
+                current_run.run_type = "partial"
             continue
 
         if m2 := _RESOURCE_DONE.search(msg):

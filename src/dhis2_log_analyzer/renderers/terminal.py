@@ -48,10 +48,13 @@ def _render_header(runs: list[AnalyticsRun], container: str, log_files: list[str
         end = runs[-1].start_time.strftime("%Y-%m-%d")
         _console.print(f"  Date range: {start} → {end}")
     n_full = sum(1 for r in runs if r.run_type == "full")
+    n_partial = sum(1 for r in runs if r.run_type == "partial")
     n_cont = sum(1 for r in runs if r.run_type == "continuous")
     parts = []
     if n_full:
         parts.append(f"full: {n_full}")
+    if n_partial:
+        parts.append(f"partial: {n_partial}")
     if n_cont:
         parts.append(f"continuous: {n_cont}")
     suffix = f"  ({', '.join(parts)})" if parts else ""
@@ -132,8 +135,12 @@ def _render_summary_table(runs: list[AnalyticsRun]) -> None:
     for run in complete:
         by_type.setdefault(run.run_type, []).append(run)
 
-    titles = {"full": "Full Run Duration Summary", "continuous": "Continuous Run Duration Summary"}
-    for run_type in ("full", "continuous"):
+    titles = {
+        "full": "Full Run Duration Summary",
+        "partial": "Partial Run Duration Summary",
+        "continuous": "Continuous Run Duration Summary",
+    }
+    for run_type in ("full", "partial", "continuous"):
         if run_type not in by_type:
             continue
         type_runs = by_type[run_type]
