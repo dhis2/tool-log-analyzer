@@ -41,7 +41,6 @@ def list_log_files(
 
     result = subprocess.run(
         ["lxc", "exec", container, "--", "find", log_dir, "-name", pattern, "-printf", "%T@ %p\n"],
-        capture_output=False,
         text=True,
         stdout=subprocess.PIPE,
     )
