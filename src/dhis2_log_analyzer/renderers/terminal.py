@@ -99,7 +99,7 @@ def _collect_stats(runs: list[AnalyticsRun]) -> dict[str, list[float]]:
     return rows
 
 
-def _print_stats_table(rows: dict[str, list[float]]) -> None:
+def _print_stats_table(rows: dict[str, list[float]], event_note: bool = False) -> None:
     table = Table(box=box.SIMPLE_HEAD, show_footer=False)
     table.add_column("Table Type", style="bold")
     table.add_column("Mean", justify="right")
@@ -115,6 +115,11 @@ def _print_stats_table(rows: dict[str, list[float]]) -> None:
             str(len(durations)),
         )
     _console.print(table)
+    if event_note:
+        _console.print(
+            "  [dim]EVENT / <program>: slowest single partition per run "
+            "(partitions run in parallel — this is the wall-clock bottleneck)[/dim]"
+        )
     _console.print()
 
 
@@ -137,7 +142,8 @@ def _render_summary_table(runs: list[AnalyticsRun]) -> None:
             continue
         _console.print(f"[bold]{titles[run_type]}[/bold]  ({len(type_runs)} runs)")
         _console.print()
-        _print_stats_table(rows)
+        has_event = any(k.startswith("EVENT / ") and k != "EVENT / indexes" for k in rows)
+        _print_stats_table(rows, event_note=has_event)
 
 
 def _render_duration_chart(runs: list[AnalyticsRun]) -> None:

@@ -178,9 +178,9 @@ def test_full_run_populate_creates_program_update_without_added_line():
     assert len(runs) == 1
     event = next(t for t in runs[0].table_updates if t.type_name == "EVENT")
     by_uid = {p.uid: p for p in event.program_updates}
-    # k44xobxx4te: two year partitions summed
+    # k44xobxx4te: two year partitions — population_seconds is the slowest one
     assert "k44xobxx4te" in by_uid
-    assert by_uid["k44xobxx4te"].population_seconds == pytest.approx(8.443113 + 9.100000)
+    assert by_uid["k44xobxx4te"].population_seconds == pytest.approx(max(8.443113, 9.100000))
     # cglczo4q3pj: one year partition
     assert "cglczo4q3pj" in by_uid
     assert by_uid["cglczo4q3pj"].population_seconds == pytest.approx(21.319828)
