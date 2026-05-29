@@ -66,21 +66,34 @@ def _render_summary_table(runs: list[AnalyticsRun]) -> None:
     if not complete:
         return
 
-    by_type: dict[str, list[float]] = {}
+    rows: dict[str, list[float]] = {}
 
     rs_totals = [
         sum(rt.duration_seconds for rt in r.resource_tables)
         for r in complete if r.resource_tables
     ]
     if rs_totals:
-        by_type["Resource Tables"] = rs_totals
+        rows["Resource Tables"] = rs_totals
 
     for run in complete:
         for t in run.table_updates:
-            if not t.aborted:
-                by_type.setdefault(t.type_name, []).append(t.duration_seconds)
+            if t.aborted:
+                continue
+            if t.type_name == "EVENT":
+                # Index creation covers all programs combined — show as its own row
+                if t.index_seconds is not None:
+                    rows.setdefault("EVENT / indexes", []).append(t.index_seconds)
+                # Population time per program: sum all partitions within this run
+                run_totals: dict[str, float] = {}
+                for p in t.program_updates:
+                    if p.had_data and p.population_seconds is not None:
+                        run_totals[p.uid] = run_totals.get(p.uid, 0.0) + p.population_seconds
+                for uid, total in run_totals.items():
+                    rows.setdefault(f"EVENT / {uid}", []).append(total)
+            else:
+                rows.setdefault(t.type_name, []).append(t.duration_seconds)
 
-    if not by_type:
+    if not rows:
         return
 
     n = len(complete)
@@ -94,9 +107,9 @@ def _render_summary_table(runs: list[AnalyticsRun]) -> None:
     table.add_column("Max", justify="right")
     table.add_column("N", justify="right")
 
-    for type_name, durations in sorted(by_type.items(), key=lambda x: _mean(x[1]), reverse=True):
+    for label, durations in sorted(rows.items(), key=lambda x: _mean(x[1]), reverse=True):
         table.add_row(
-            type_name,
+            label,
             format_duration(_mean(durations)),
             format_duration(min(durations)),
             format_duration(max(durations)),
