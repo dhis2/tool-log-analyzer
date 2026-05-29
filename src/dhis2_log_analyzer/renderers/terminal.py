@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+
 from rich import box
 from rich.console import Console
 from rich.table import Table
@@ -8,6 +10,12 @@ import plotext as plt
 from dhis2_log_analyzer.parsers.base import AnalyticsRun
 
 _console = Console()
+_CHART_HEIGHT = 20
+
+
+def _chart_size() -> tuple[int, int]:
+    cols = shutil.get_terminal_size().columns
+    return cols, _CHART_HEIGHT
 
 
 def format_duration(seconds: float) -> str:
@@ -73,6 +81,7 @@ def _render_duration_chart(runs: list[AnalyticsRun]) -> None:
     values = [r.total_duration_seconds / 60 for r in runs]
 
     plt.clf()
+    plt.plot_size(*_chart_size())
     plt.plot(values, label="Total duration (min)")
     plt.xticks(range(len(labels)), labels)
     plt.title("Run Duration Over Time")
@@ -94,6 +103,7 @@ def _render_index_chart(runs: list[AnalyticsRun]) -> None:
     values = [d[1] / 60 for d in data]
 
     plt.clf()
+    plt.plot_size(*_chart_size())
     plt.plot(values, label="Index time (min)")
     plt.xticks(range(len(labels)), labels)
     plt.title("DATA_VALUE Index Creation Time Over Time")
@@ -116,6 +126,7 @@ def _render_program_breakdown(run: AnalyticsRun) -> None:
 
     _console.print("[bold]Per-Program Event Breakdown (latest run)[/bold]")
     plt.clf()
+    plt.plot_size(*_chart_size())
     plt.bar(
         [p.uid for p in programs],
         [p.population_seconds for p in programs],
