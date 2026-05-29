@@ -110,7 +110,7 @@ def _render_summary_table(runs: list[AnalyticsRun]) -> None:
     table.add_column("Max", justify="right")
     table.add_column("N", justify="right")
 
-    for label, durations in sorted(rows.items(), key=lambda x: _mean(x[1]), reverse=True):
+    for label, durations in sorted(rows.items()):
         table.add_row(
             label,
             format_duration(_mean(durations)),
