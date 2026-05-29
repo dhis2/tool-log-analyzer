@@ -18,11 +18,18 @@ uv sync
 
 ## Usage
 
-```bash
-# Analyze the current analytics log from a container
-dhis2-analyze-logs hmis
+The entry point lives inside the virtualenv. Either prefix with `uv run`:
 
-# Include rotated logs from the last 14 days
+```bash
+uv run dhis2-analyze-logs hmis
+uv run dhis2-analyze-logs hmis --days 14
+```
+
+Or activate the virtualenv once per session and then call it directly:
+
+```bash
+source .venv/bin/activate
+dhis2-analyze-logs hmis
 dhis2-analyze-logs hmis --days 14
 ```
 
