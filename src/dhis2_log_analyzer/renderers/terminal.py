@@ -47,7 +47,15 @@ def _render_header(runs: list[AnalyticsRun], container: str, log_files: list[str
         start = runs[0].start_time.strftime("%Y-%m-%d")
         end = runs[-1].start_time.strftime("%Y-%m-%d")
         _console.print(f"  Date range: {start} → {end}")
-    _console.print(f"  Runs found: {len(runs)}")
+    n_full = sum(1 for r in runs if r.run_type == "full")
+    n_cont = sum(1 for r in runs if r.run_type == "continuous")
+    parts = []
+    if n_full:
+        parts.append(f"full: {n_full}")
+    if n_cont:
+        parts.append(f"continuous: {n_cont}")
+    suffix = f"  ({', '.join(parts)})" if parts else ""
+    _console.print(f"  Runs found: {len(runs)}{suffix}")
     _console.print()
 
 
@@ -61,31 +69,23 @@ def _render_latest_run_header(run: AnalyticsRun) -> None:
     _console.print()
 
 
-def _render_summary_table(runs: list[AnalyticsRun]) -> None:
-    complete = [r for r in runs if r.complete]
-    if not complete:
-        return
-
+def _collect_stats(runs: list[AnalyticsRun]) -> dict[str, list[float]]:
     rows: dict[str, list[float]] = {}
 
     rs_totals = [
         sum(rt.duration_seconds for rt in r.resource_tables)
-        for r in complete if r.resource_tables
+        for r in runs if r.resource_tables
     ]
     if rs_totals:
         rows["Resource Tables"] = rs_totals
 
-    for run in complete:
+    for run in runs:
         for t in run.table_updates:
             if t.aborted:
                 continue
             if t.type_name == "EVENT":
-                # Index creation covers all programs combined — show as its own row
                 if t.index_seconds is not None:
                     rows.setdefault("EVENT / indexes", []).append(t.index_seconds)
-                # Population time per program: sum all partitions within this run.
-                # Normalize UID to lowercase so full-run (table-name) and continuous-run
-                # (original-case) entries for the same program aggregate together.
                 run_totals: dict[str, float] = {}
                 for p in t.program_updates:
                     if p.had_data and p.population_seconds is not None:
@@ -96,20 +96,16 @@ def _render_summary_table(runs: list[AnalyticsRun]) -> None:
             else:
                 rows.setdefault(t.type_name, []).append(t.duration_seconds)
 
-    if not rows:
-        return
+    return rows
 
-    n = len(complete)
-    _console.print(f"[bold]Table Type Duration Summary[/bold]  ({n} complete runs)")
-    _console.print()
 
+def _print_stats_table(rows: dict[str, list[float]]) -> None:
     table = Table(box=box.SIMPLE_HEAD, show_footer=False)
     table.add_column("Table Type", style="bold")
     table.add_column("Mean", justify="right")
     table.add_column("Min", justify="right")
     table.add_column("Max", justify="right")
     table.add_column("N", justify="right")
-
     for label, durations in sorted(rows.items()):
         table.add_row(
             label,
@@ -118,8 +114,30 @@ def _render_summary_table(runs: list[AnalyticsRun]) -> None:
             format_duration(max(durations)),
             str(len(durations)),
         )
-
     _console.print(table)
+    _console.print()
+
+
+def _render_summary_table(runs: list[AnalyticsRun]) -> None:
+    complete = [r for r in runs if r.complete]
+    if not complete:
+        return
+
+    by_type: dict[str, list[AnalyticsRun]] = {}
+    for run in complete:
+        by_type.setdefault(run.run_type, []).append(run)
+
+    titles = {"full": "Full Run Duration Summary", "continuous": "Continuous Run Duration Summary"}
+    for run_type in ("full", "continuous"):
+        if run_type not in by_type:
+            continue
+        type_runs = by_type[run_type]
+        rows = _collect_stats(type_runs)
+        if not rows:
+            continue
+        _console.print(f"[bold]{titles[run_type]}[/bold]  ({len(type_runs)} runs)")
+        _console.print()
+        _print_stats_table(rows)
 
 
 def _render_duration_chart(runs: list[AnalyticsRun]) -> None:
