@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from statistics import mean as _mean
 
 from rich import box
 from rich.console import Console
@@ -29,7 +30,8 @@ def format_duration(seconds: float) -> str:
 
 def render(runs: list[AnalyticsRun], container: str, log_files: list[str]) -> None:
     _render_header(runs, container, log_files)
-    _render_latest_run(runs[-1])
+    _render_latest_run_header(runs[-1])
+    _render_summary_table(runs)
     if len(runs) > 1:
         _render_duration_chart(runs)
         _render_index_chart(runs)
@@ -49,7 +51,7 @@ def _render_header(runs: list[AnalyticsRun], container: str, log_files: list[str
     _console.print()
 
 
-def _render_latest_run(run: AnalyticsRun) -> None:
+def _render_latest_run_header(run: AnalyticsRun) -> None:
     label = "[incomplete]" if not run.complete else f"[{run.run_type}]"
     total = format_duration(run.total_duration_seconds)
     _console.print(
@@ -58,20 +60,48 @@ def _render_latest_run(run: AnalyticsRun) -> None:
     )
     _console.print()
 
+
+def _render_summary_table(runs: list[AnalyticsRun]) -> None:
+    complete = [r for r in runs if r.complete]
+    if not complete:
+        return
+
+    by_type: dict[str, list[float]] = {}
+
+    rs_totals = [
+        sum(rt.duration_seconds for rt in r.resource_tables)
+        for r in complete if r.resource_tables
+    ]
+    if rs_totals:
+        by_type["Resource Tables"] = rs_totals
+
+    for run in complete:
+        for t in run.table_updates:
+            if not t.aborted:
+                by_type.setdefault(t.type_name, []).append(t.duration_seconds)
+
+    if not by_type:
+        return
+
+    n = len(complete)
+    _console.print(f"[bold]Table Type Duration Summary[/bold]  ({n} complete runs)")
+    _console.print()
+
     table = Table(box=box.SIMPLE_HEAD, show_footer=False)
     table.add_column("Table Type", style="bold")
-    table.add_column("Duration", justify="right")
-    table.add_column("Index Time", justify="right")
-    table.add_column("Status", justify="center")
+    table.add_column("Mean", justify="right")
+    table.add_column("Min", justify="right")
+    table.add_column("Max", justify="right")
+    table.add_column("N", justify="right")
 
-    if run.resource_tables:
-        total_rs = sum(r.duration_seconds for r in run.resource_tables)
-        table.add_row("Resource Tables", format_duration(total_rs), "—", "done")
-
-    for t in run.table_updates:
-        status = "abort" if t.aborted else "done"
-        index = format_duration(t.index_seconds) if t.index_seconds is not None else "—"
-        table.add_row(t.type_name, format_duration(t.duration_seconds), index, status)
+    for type_name, durations in sorted(by_type.items(), key=lambda x: _mean(x[1]), reverse=True):
+        table.add_row(
+            type_name,
+            format_duration(_mean(durations)),
+            format_duration(min(durations)),
+            format_duration(max(durations)),
+            str(len(durations)),
+        )
 
     _console.print(table)
 

@@ -50,6 +50,7 @@ def parse(lines: Iterable[str]) -> list[AnalyticsRun]:
     current_table: TableTypeUpdate | None = None
     last_ts: datetime | None = None
     agg_elapsed: float | None = None
+    continuous_started_ts: datetime | None = None
 
     def _close_table(finalized: bool = False) -> None:
         nonlocal current_table, agg_elapsed
@@ -81,8 +82,14 @@ def parse(lines: Iterable[str]) -> list[AnalyticsRun]:
         ts = _parse_timestamp(ts_str)
 
         if _FULL_RUN.search(msg):
-            # Within a continuous run, this line is informational — do not start a new run.
-            if current_run is not None and current_run.run_type == "continuous":
+            # "Found N analytics table types" appears both as the start of a nightly full
+            # run AND as an informational init line emitted ~1ms after "Starting continuous
+            # analytics table update". Distinguish by time proximity: if this line appears
+            # within 5 seconds of the continuous run start, it is informational only.
+            if (
+                continuous_started_ts is not None
+                and (ts - continuous_started_ts).total_seconds() < 5
+            ):
                 continue
             _close_run()
             last_ts = ts
@@ -92,6 +99,7 @@ def parse(lines: Iterable[str]) -> list[AnalyticsRun]:
         if _CONTINUOUS_RUN.search(msg):
             _close_run()
             last_ts = ts
+            continuous_started_ts = ts
             current_run = AnalyticsRun(start_time=ts, run_type="continuous")
             continue
 

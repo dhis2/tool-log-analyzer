@@ -163,6 +163,37 @@ def test_first_run_duration_excludes_next_run_start():
     assert runs[0].total_duration_seconds == pytest.approx(expected)
 
 
+# ── continuous + full run interleaving ────────────────────────────────────────
+
+def test_full_run_after_continuous_is_detected_as_new_run():
+    """A nightly full run starting hours after a continuous run must not be swallowed."""
+    lines = [
+        # continuous run at 00:26
+        "* INFO  2026-05-24T00:26:20,030 Starting continuous analytics table update, current time: '2026-05-24T00:26:20' (ContinuousAnalyticsTableJob.java [pool-14-thread-52])",
+        "* INFO  2026-05-24T00:26:20,031 Found 11 analytics table types: [EVENT] (DefaultAnalyticsTableGenerator.java [pool-14-thread-52])",
+        "* INFO  2026-05-24T00:26:29,820 Starting update of type: EVENT, table name: 'analytics_event', parallel jobs: 8: 00:00:00.000 (Clock.java [pool-14-thread-52])",
+        "* INFO  2026-05-24T00:26:38,482 Table update done: 'analytics_event': 00:00:08.661 (Clock.java [pool-14-thread-52])",
+        # full nightly run at 01:00 — NOT within 5s of the continuous run start
+        "* INFO  2026-05-24T01:00:20,025 Found 11 analytics table types: [DATA_VALUE] (DefaultAnalyticsTableGenerator.java [pool-13-thread-269])",
+        "* INFO  2026-05-24T01:01:27,296 Starting update of type: DATA_VALUE, table name: 'analytics', parallel jobs: 19: 00:00:00.000 (Clock.java [pool-13-thread-269])",
+        "* INFO  2026-05-24T01:13:13,768 Table update done: 'analytics': 00:11:45.842 (Clock.java [pool-13-thread-269])",
+    ]
+    runs = parse(iter(lines))
+    assert len(runs) == 2
+    assert runs[0].run_type == "continuous"
+    assert runs[1].run_type == "full"
+    # Continuous run duration should be seconds, not hours
+    assert runs[0].total_duration_seconds < 60
+
+
+def test_informational_found_line_inside_continuous_run_is_skipped():
+    """The 'Found N analytics table types' line emitted within 5s of a continuous
+    run start is informational and must not start a new full run."""
+    runs = parse(iter(CONTINUOUS_RUN_LINES))
+    assert len(runs) == 1
+    assert runs[0].run_type == "continuous"
+
+
 # ── incomplete run ────────────────────────────────────────────────────────────
 
 def test_incomplete_run_has_no_table_update_done():

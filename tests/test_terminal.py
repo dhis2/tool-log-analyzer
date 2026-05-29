@@ -53,3 +53,9 @@ def test_render_does_not_raise_with_multiple_runs():
 def test_render_does_not_raise_with_incomplete_run():
     runs = [_make_run(complete=False)]
     render(runs, container="hmis", log_files=["dhis-analytics-table.log"])
+
+
+def test_render_does_not_raise_with_all_incomplete_runs():
+    # Summary table should be skipped gracefully when no complete runs exist
+    runs = [_make_run(complete=False), _make_run(complete=False)]
+    render(runs, container="hmis", log_files=["dhis-analytics-table.log"])
