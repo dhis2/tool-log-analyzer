@@ -117,8 +117,8 @@ def _print_stats_table(rows: dict[str, list[float]], event_note: bool = False) -
     _console.print(table)
     if event_note:
         _console.print(
-            "  [dim]EVENT / <program>: slowest single partition per run "
-            "(partitions run in parallel — this is the wall-clock bottleneck)[/dim]"
+            "  [dim]EVENT / <program>: elapsed from EVENT phase start to last partition completion "
+            "(wall-clock contribution per program)[/dim]"
         )
     _console.print()
 

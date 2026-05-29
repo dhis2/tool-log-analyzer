@@ -126,13 +126,22 @@ def test_continuous_run_per_program_no_data():
 
 
 def test_continuous_run_per_program_with_data_and_timing():
+    # population_seconds is now elapsed from EVENT phase start to populate log line timestamp.
+    # EVENT started at 16:26:29,820. cGlCzO4q3PJ logged at 16:26:30,113 → elapsed ≈ 0.293s.
+    # K44XOBXX4tE logged at 16:26:37,200 → elapsed ≈ 7.380s.
     runs = parse(iter(CONTINUOUS_RUN_LINES))
     event = next(t for t in runs[0].table_updates if t.type_name == "EVENT")
     with_data = {p.uid: p for p in event.program_updates if p.had_data}
     assert "cGlCzO4q3PJ" in with_data
-    assert with_data["cGlCzO4q3PJ"].population_seconds == pytest.approx(0.118378)
+    assert with_data["cGlCzO4q3PJ"].population_seconds == pytest.approx(
+        (datetime(2025, 9, 12, 16, 26, 30, 113000) - datetime(2025, 9, 12, 16, 26, 29, 820000)).total_seconds(),
+        abs=0.01,
+    )
     assert "K44XOBXX4tE" in with_data
-    assert with_data["K44XOBXX4tE"].population_seconds == pytest.approx(7.205030)
+    assert with_data["K44XOBXX4tE"].population_seconds == pytest.approx(
+        (datetime(2025, 9, 12, 16, 26, 37, 200000) - datetime(2025, 9, 12, 16, 26, 29, 820000)).total_seconds(),
+        abs=0.01,
+    )
 
 
 # ── multi-run ─────────────────────────────────────────────────────────────────
@@ -166,24 +175,28 @@ def test_first_run_duration_excludes_next_run_start():
 # ── full run per-program population ──────────────────────────────────────────
 
 def test_full_run_populate_creates_program_update_without_added_line():
-    """Full runs emit Populating table lines without preceding Added latest lines."""
+    """Full runs emit Populating table lines without preceding Added latest lines.
+    population_seconds = wall-clock elapsed from EVENT phase start to last partition log."""
     lines = FULL_RUN_LINES[:7] + [  # up to and including DATA_VALUE done
+        # EVENT starts at 01:13:13,769
         "* INFO  2026-05-24T01:13:13,769 Starting update of type: EVENT, table name: 'analytics_event', parallel jobs: 19: 00:00:00.000 (Clock.java [pool-13-thread-269])",
-        "* INFO  2026-05-24T01:13:14,000 Populating table: 'analytics_event_k44xobxx4te_2024_temp' in: 8.443113 sec. (AbstractJdbcTableManager.java [ForkJoinPool-9398-worker-3])",
-        "* INFO  2026-05-24T01:13:15,000 Populating table: 'analytics_event_k44xobxx4te_2025_temp' in: 9.100000 sec. (AbstractJdbcTableManager.java [ForkJoinPool-9398-worker-3])",
-        "* INFO  2026-05-24T01:13:16,000 Populating table: 'analytics_event_cglczo4q3pj_2024_temp' in: 21.319828 sec. (AbstractJdbcTableManager.java [ForkJoinPool-9398-worker-5])",
+        # k44xobxx4te: first partition at +1s, second (later) at +2s → elapsed = 2s
+        "* INFO  2026-05-24T01:13:14,769 Populating table: 'analytics_event_k44xobxx4te_2024_temp' in: 8.443113 sec. (AbstractJdbcTableManager.java [ForkJoinPool-9398-worker-3])",
+        "* INFO  2026-05-24T01:13:15,769 Populating table: 'analytics_event_k44xobxx4te_2025_temp' in: 9.100000 sec. (AbstractJdbcTableManager.java [ForkJoinPool-9398-worker-3])",
+        # cglczo4q3pj: logged at +3s
+        "* INFO  2026-05-24T01:13:16,769 Populating table: 'analytics_event_cglczo4q3pj_2024_temp' in: 21.319828 sec. (AbstractJdbcTableManager.java [ForkJoinPool-9398-worker-5])",
         "* INFO  2026-05-24T01:13:40,000 Table update done: 'analytics_event': 00:00:26.000 (Clock.java [pool-13-thread-269])",
     ]
     runs = parse(iter(lines))
     assert len(runs) == 1
     event = next(t for t in runs[0].table_updates if t.type_name == "EVENT")
     by_uid = {p.uid: p for p in event.program_updates}
-    # k44xobxx4te: two year partitions — population_seconds is the slowest one
+    # k44xobxx4te: last partition logged 2s after EVENT start
     assert "k44xobxx4te" in by_uid
-    assert by_uid["k44xobxx4te"].population_seconds == pytest.approx(max(8.443113, 9.100000))
-    # cglczo4q3pj: one year partition
+    assert by_uid["k44xobxx4te"].population_seconds == pytest.approx(2.0, abs=0.01)
+    # cglczo4q3pj: last partition logged 3s after EVENT start
     assert "cglczo4q3pj" in by_uid
-    assert by_uid["cglczo4q3pj"].population_seconds == pytest.approx(21.319828)
+    assert by_uid["cglczo4q3pj"].population_seconds == pytest.approx(3.0, abs=0.01)
 
 
 # ── continuous + full run interleaving ────────────────────────────────────────

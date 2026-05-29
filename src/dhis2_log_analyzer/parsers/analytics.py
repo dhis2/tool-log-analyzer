@@ -51,13 +51,15 @@ def parse(lines: Iterable[str]) -> list[AnalyticsRun]:
     last_ts: datetime | None = None
     agg_elapsed: float | None = None
     continuous_started_ts: datetime | None = None
+    table_start_ts: datetime | None = None  # timestamp when current table type update started
 
     def _close_table(finalized: bool = False) -> None:
-        nonlocal current_table, agg_elapsed
+        nonlocal current_table, agg_elapsed, table_start_ts
         if current_table is not None and current_run is not None and finalized:
             current_run.table_updates.append(current_table)
         current_table = None
         agg_elapsed = None
+        table_start_ts = None
 
     def _close_run() -> None:
         nonlocal current_run, last_ts
@@ -116,6 +118,7 @@ def parse(lines: Iterable[str]) -> list[AnalyticsRun]:
 
         if m2 := _TABLE_START.search(msg):
             _close_table()
+            table_start_ts = ts  # record when this table type phase began
             current_table = TableTypeUpdate(
                 type_name=m2.group(1),
                 table_name=m2.group(2),
@@ -163,17 +166,23 @@ def parse(lines: Iterable[str]) -> list[AnalyticsRun]:
 
             if m2 := _PROG_POPULATE.search(msg):
                 uid_lower = m2.group(1)
-                seconds = float(m2.group(2))
+                # Wall-clock elapsed from EVENT phase start to when this partition's log
+                # line was written (i.e. when it completed). Taking the max across all
+                # partitions gives the time at which this program's last partition finished —
+                # which is when it stopped contributing to the EVENT phase wall-clock time.
+                elapsed = (
+                    (ts - table_start_ts).total_seconds()
+                    if table_start_ts is not None
+                    else float(m2.group(2))  # fallback: use CPU time if no start recorded
+                )
                 for prog in current_table.program_updates:
                     if prog.uid.lower() == uid_lower and prog.had_data:
-                        # Track the slowest partition: partitions run in parallel so wall-clock
-                        # impact is determined by the single longest-running partition, not the sum.
-                        prog.population_seconds = max(prog.population_seconds or 0.0, seconds)
+                        prog.population_seconds = max(prog.population_seconds or 0.0, elapsed)
                         break
                 else:
                     # Full run: no preceding "Added latest" line — create on the fly
                     current_table.program_updates.append(
-                        ProgramUpdate(uid=uid_lower, had_data=True, population_seconds=seconds)
+                        ProgramUpdate(uid=uid_lower, had_data=True, population_seconds=elapsed)
                     )
                 continue
 
